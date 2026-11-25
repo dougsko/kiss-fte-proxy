@@ -18,25 +18,93 @@ SMALL_CTRL_THRESHOLD = int(os.getenv("SMALL_CTRL_THRESHOLD", "32"))
 MAX_PLAINTEXT_CHUNK = int(os.getenv("MAX_PLAINTEXT_CHUNK", "110"))
 FEND, FESC, TFEND, TFESC = 0xC0, 0xDB, 0xDC, 0xDD
 
+# --- Realistic BBS Narrative Generator ---
+FILE_TEMPLATES = [
+    ("SYSUPD", "ZIP"),
+    ("WXMAPS", "GIF"),
+    ("NODELST", "LZH"),
+    ("BPQCFG", "TGZ"),
+    ("PROPAG", "DAT"),
+]
 
-def encode_bbs_packet(payload: bytes, is_small_ctrl: bool) -> str:
-    b64 = base64.b64encode(payload).decode("ascii")
-    if is_small_ctrl:
-        return f"ACK [{b64}]\r"
-    lines = ["M" + line for line in textwrap.wrap(b64, width=62)]
-    body = "\r".join(lines)
-    return (
-        f" go_7+. 01 of 01 DATA 00000 0000\r"
-        f"{body}\r"
-        f" stop_7+. (0000/0000)\r"
-        f"de {DST_CALL}>\r"
-    )
+CORRUPTION_NOTICES = [
+    "*** Frame CRC mismatch - requesting block retry",
+    "*** Line noise detected (BAD FCS) - NAK sent",
+    "*** Checksum error on block - re-syncing stream",
+]
 
 
-CTRL_PARSE_RE = re.compile(r"^ACK \[([A-Za-z0-9+/=]+)\]\r$")
+class BBSNarrator:
+    """Maintains a believable sequential 7PLUS file upload narrative across packets."""
+
+    def __init__(self, src_call: str, dst_call: str):
+        self.src_call = src_call
+        self.dst_call = dst_call
+        self.file_seq = random.randint(1, 20)
+        self.part_num = 1
+        self.part_tot = random.randint(8, 16)
+        self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
+        self.filename = self._next_filename()
+        self.last_part_num = 1
+
+    def _next_filename(self) -> str:
+        prefix, ext = random.choice(FILE_TEMPLATES)
+        fname = f"{prefix}{self.file_seq:02d}.{ext}"
+        self.file_seq = (self.file_seq % 99) + 1
+        return fname
+
+    def format_packet(self, payload: bytes, is_small_ctrl: bool, part: int = 1, total: int = 1) -> str:
+        b64 = base64.b64encode(payload).decode("ascii")
+
+        if is_small_ctrl:
+            return (
+                f"ACK {self.last_part_num:02d} [{b64}] OK - Send next block\r"
+                f"de {self.src_call}>\r"
+            )
+
+        lines = ["M" + line for line in textwrap.wrap(b64, width=62)]
+        body = "\r".join(lines)
+        block_crc = f"{random.randint(0, 0xFFFF):04X}"
+        curr_part = part if total > 1 else self.part_num
+        status_line = ""
+
+        if total == 1:
+            curr_part = self.part_num
+            self.last_part_num = curr_part
+            self.part_num = 1
+            self.part_tot = random.randint(8, 16)
+            self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
+            self.filename = self._next_filename()
+        elif curr_part == self.part_tot:
+            status_line = f"7PLUS extraction complete - {self.filename} saved\r"
+            self.part_num = 1
+            self.part_tot = random.randint(8, 16)
+            self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
+            self.filename = self._next_filename()
+        else:
+            simulate_retry = (curr_part < self.part_tot) and (random.random() < 0.15)
+            if simulate_retry:
+                status_line = f"{random.choice(CORRUPTION_NOTICES)}\r"
+            else:
+                status_line = ""
+                self.part_num += 1
+
+        return (
+            f" go_7+. {curr_part:02d} of {total if total > 1 else self.part_tot:02d} "
+            f"{self.filename} 00512 {self.file_crc}\r"
+            f"{body}\r"
+            f"{status_line}"
+            f" stop_7+. ({self.file_crc}/{block_crc})\r"
+            f"de {self.dst_call}>\r"
+        )
+
+
+CTRL_PARSE_RE = re.compile(r"^ACK \d{2} \[([A-Za-z0-9+/=]+)\] OK - Send next block\rde [^>]+>\r$")
+
 DATA_PARSE_RE = re.compile(
     r"^ go_7\+\. \d{2} of \d{2} [A-Z0-9_.]+ \d{5} [0-9A-F]{4}\r"
     r"([\s\S]+?)\r"
+    r"(?:(?:\*\*\* [^\r]+|7PLUS extraction complete - [^\r]+)\r)?"
     r" stop_7\+\. \([0-9A-F]{4}/[0-9A-F]{4}\)\r"
     r"de [^>]+>\r$"
 )
@@ -189,6 +257,7 @@ def handle_session(app_sock: socket.socket):
     tnc_sock.settimeout(None)
     reassembler = ReassemblyBuffer()
     tx_msg_id = random.randint(0, 65535)
+    bbs_narrator = BBSNarrator(SRC_CALL, DST_CALL)
 
     def app_to_tnc():
         nonlocal tx_msg_id
@@ -203,7 +272,9 @@ def handle_session(app_sock: socket.socket):
                     raise ValueError("frame exceeds 255-chunk protocol limit")
                 for idx, chunk in enumerate(chunks):
                     framed = struct.pack("!HBB", tx_msg_id, idx, total) + chunk
-                    bbs_text = encode_bbs_packet(framed, is_small_ctrl).encode("ascii")
+                    bbs_text = bbs_narrator.format_packet(
+                        framed, is_small_ctrl, idx + 1, total
+                    ).encode("ascii")
                     ax25_out = wrap_ax25_ui(bbs_text)
                     kiss_out = bytes((FEND, 0x00)) + kiss_escape(ax25_out) + bytes((FEND,))
                     tnc_sock.sendall(kiss_out)
