@@ -1,23 +1,17 @@
 import base64
-import os
 import re
 import socket
 import struct
 import threading
+import textwrap
 import time
 import random
-import textwrap
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # --- Configuration ---
-APP_LISTEN_ADDR = ("127.0.0.1", 8001)   # Upstream app (Reticulum / TCP KISS)
+APP_LISTEN_ADDR = ("127.0.0.1", 8001)   # Upstream app (TCP KISS)
 TNC_TARGET_ADDR = ("127.0.0.1", 8002)   # Direwolf / TNC KISS port
 SRC_CALL = "NODE1-1"
 DST_CALL = "BBS-1"
-
-# Shared 32-byte AES-256-GCM key (must match on both ends)
-AES_KEY = bytes.fromhex("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
-aesgcm = AESGCM(AES_KEY)
 
 # Thresholds & Chunking
 SMALL_CTRL_THRESHOLD = 32   # Frames <= 32B look like short BBS ACK/control lines
@@ -29,96 +23,33 @@ FESC = 0xDB
 TFEND = 0xDC
 TFESC = 0xDD
 
-FILE_TEMPLATES = [
-    ("SYSUPD", "ZIP"),
-    ("WXMAPS", "GIF"),
-    ("NODELST", "LZH"),
-    ("BPQCFG", "TGZ"),
-    ("PROPAG", "DAT"),
-]
 
-CORRUPTION_NOTICES = [
-    "*** Frame CRC mismatch - requesting block retry",
-    "*** Line noise detected (BAD FCS) - NAK sent",
-    "*** Checksum error on block - re-syncing stream",
-]
-
-
-class TransferNarrator:
-    """Maintains a believable sequential 7PLUS file upload narrative across packets."""
-
-    def __init__(self):
-        self.file_seq = random.randint(1, 20)
-        self.part_num = 1
-        self.part_tot = random.randint(8, 16)
-        self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
-        self.filename = self._next_filename()
-        self.last_part_num = 1
-
-    def _next_filename(self) -> str:
-        prefix, ext = random.choice(FILE_TEMPLATES)
-        fname = f"{prefix}{self.file_seq:02d}.{ext}"
-        self.file_seq = (self.file_seq % 99) + 1
-        return fname
-
-    def format_packet(self, ciphertext: bytes, is_small_ctrl: bool) -> str:
-        b64_payload = base64.b64encode(ciphertext).decode("ascii")
-
-        # 1. Small upstream packets (ACKs, keepalives) -> Short BBS control response
-        if is_small_ctrl:
-            return (
-                f"ACK {self.last_part_num:02d} [{b64_payload}] OK - Send next block\r"
-                f"de {SRC_CALL}>\r"
-            )
-
-        # 2. Data packets -> Sequential 7PLUS file block
-        lines = ["M" + line for line in textwrap.wrap(b64_payload, width=62)]
-        body = "\r".join(lines)
-        block_crc = f"{random.randint(0, 0xFFFF):04X}"
-        curr_part = self.part_num
-        self.last_part_num = curr_part
-
-        # Decide whether this packet simulates a transient retry (~20%) or clean advance (~80%)
-        simulate_retry = (curr_part < self.part_tot) and (random.random() < 0.20)
-
-        if simulate_retry:
-            notice = random.choice(CORRUPTION_NOTICES)
-            status_line = f"{notice}\r"
-            # Do NOT increment self.part_num so the next packet looks like a retry of curr_part
-        elif curr_part == self.part_tot:
-            status_line = f"7PLUS extraction complete - {self.filename} saved\r"
-            # Roll over to a brand new file for the next packet
-            self.part_num = 1
-            self.part_tot = random.randint(8, 16)
-            self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
-            self.filename = self._next_filename()
-        else:
-            status_line = ""
-            self.part_num += 1
-
-        return (
-            f" go_7+. {curr_part:02d} of {self.part_tot:02d} {self.filename} 00512 {self.file_crc}\r"
-            f"{body}\r"
-            f"{status_line}"
-            f" stop_7+. ({self.file_crc}/{block_crc})\r"
-            f"de {DST_CALL}>\r"
-        )
+# --- BBS Encoding ---
+def encode_bbs_packet(payload: bytes, is_small_ctrl: bool) -> str:
+    b64 = base64.b64encode(payload).decode("ascii")
+    if is_small_ctrl:
+        return f"ACK [{b64}]\r"
+    lines = ["M" + line for line in textwrap.wrap(b64, width=62)]
+    body = "\r".join(lines)
+    return (
+        f" go_7+. 01 of 01 DATA 00000 0000\r"
+        f"{body}\r"
+        f" stop_7+. (0000/0000)\r"
+        f"de {DST_CALL}>\r"
+    )
 
 
-# --- Decoders for Both Asymmetric Formats ---
-CTRL_PARSE_RE = re.compile(r"^ACK \d{2} \[([A-Za-z0-9+/=]+)\] OK - Send next block\rde [^>]+>\r$")
+CTRL_PARSE_RE = re.compile(r"^ACK \[([A-Za-z0-9+/=]+)\]\r$")
 
-SEVENPLUS_PARSE_RE = re.compile(
+DATA_PARSE_RE = re.compile(
     r"^ go_7\+\. \d{2} of \d{2} [A-Z0-9_.]+ \d{5} [0-9A-F]{4}\r"
     r"([\s\S]+?)\r"
-    r"(?:(?:\*\*\* [^\r]+|7PLUS extraction complete - [^\r]+)\r)?"
     r" stop_7\+\. \([0-9A-F]{4}/[0-9A-F]{4}\)\r"
     r"de [^>]+>\r$"
 )
 
 
 def decode_bbs_packet(bbs_text: str) -> bytes | None:
-    # Try short ACK/control format first
     m_ctrl = CTRL_PARSE_RE.match(bbs_text)
     if m_ctrl:
         try:
@@ -126,16 +57,15 @@ def decode_bbs_packet(bbs_text: str) -> bytes | None:
         except Exception:
             return None
 
-    # Otherwise try 7PLUS file block format
-    m_data = SEVENPLUS_PARSE_RE.match(bbs_text)
+    m_data = DATA_PARSE_RE.match(bbs_text)
     if not m_data:
         return None
 
     lines = m_data.group(1).split("\r")
-    if not all(line.startswith("M") for line in lines):
+    if not all(line.startswith("M") for line in lines if line):
         return None
 
-    b64_str = "".join(line[1:] for line in lines)
+    b64_str = "".join(line[1:] for line in lines if line)
     try:
         return base64.b64decode(b64_str, validate=True)
     except Exception:
@@ -249,7 +179,6 @@ class ReassemblyBuffer:
 def handle_session(app_sock: socket.socket):
     tnc_sock = socket.create_connection(TNC_TARGET_ADDR)
     reassembler = ReassemblyBuffer()
-    narrator = TransferNarrator()
     tx_msg_id = random.randint(0, 65535)
 
     def app_to_tnc():
@@ -266,14 +195,10 @@ def handle_session(app_sock: socket.socket):
 
             for idx, chunk in enumerate(chunks):
                 framed_plain = struct.pack("!HBB", tx_msg_id, idx, total) + chunk
-                nonce = os.urandom(12)
-                ciphertext = nonce + aesgcm.encrypt(nonce, framed_plain, None)
-
-                bbs_text = narrator.format_packet(ciphertext, is_small_ctrl).encode("ascii")
+                bbs_text = encode_bbs_packet(framed_plain, is_small_ctrl).encode("ascii")
                 ax25_out = wrap_ax25_ui(bbs_text)
                 kiss_out = bytes([FEND, 0x00]) + kiss_escape(ax25_out) + bytes([FEND])
 
-                time.sleep(random.uniform(0.08, 0.30))
                 tnc_sock.sendall(kiss_out)
 
     def tnc_to_app():
@@ -282,14 +207,8 @@ def handle_session(app_sock: socket.socket):
             if not info:
                 continue
 
-            ciphertext = decode_bbs_packet(info.decode("ascii", errors="ignore"))
-            if not ciphertext or len(ciphertext) < 28:
-                continue
-
-            try:
-                nonce, ct = ciphertext[:12], ciphertext[12:]
-                framed_plain = aesgcm.decrypt(nonce, ct, None)
-            except Exception:
+            framed_plain = decode_bbs_packet(info.decode("ascii", errors="ignore"))
+            if not framed_plain or len(framed_plain) < 4:
                 continue
 
             msg_id, idx, total = struct.unpack("!HBB", framed_plain[:4])
@@ -319,6 +238,3 @@ if __name__ == "__main__":
         print("\n[*] Shutting down")
     finally:
         server.close()
-
-
-
