@@ -1,0 +1,18 @@
+[Unit]
+Description=KISS FTE Proxy (BBS/APRS cover traffic)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/dougsko/kiss-fte-proxy:latest
+AutoUpdate=registry
+EnvironmentFile=/etc/kiss-fte-proxy/kiss-fte-proxy.env
+Network=host
+Label=io.containers.autoupdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target
