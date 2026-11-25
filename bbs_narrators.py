@@ -175,71 +175,103 @@ class BBSB7PlusNarrator(BBSBaseNarrator):
 
 
 # --- APRS narrator ---
-# APRS message format: >TOCALL,PATH:MSG
-# We encode payload as base64 in a text message: >DST_CALL,APRS:<b64>
-# For small control: >DST_CALL,APRS:ACK:<b64>
-# For data: >DST_CALL,APRS:DATA:<b64>
-# We use a sequence number to simulate conversation flow.
+# Realistic APRS info-field cover formats. Each carries a base64-encoded
+# payload so the traffic looks like genuine APRS while remaining fully
+# decodable back to the original framed bytes.
+#
+#   Message   :ADDRESS:payload{SEQ}   addressed APRS message (control)
+#   Status    >payload                APRS status report
+#   Bulletin  :BLNn:payload           APRS bulletin
+#
+# The narrator rotates through these formats so cover traffic looks varied
+# and plausible rather than repeating a single template. The part/total
+# bookkeeping lives in the proxy's outer framing (struct.pack('!HBB', ...)),
+# so the narrator only needs to round-trip the framed bytes.
 
-APRS_CTRL_RE = re.compile(r"^>(\w+)>(\w+):ACK:(\d+):([A-Za-z0-9+/=]+)$")
-APRS_DATA_RE = re.compile(r"^>(\w+)>(\w+):DATA:(\d+):([A-Za-z0-9+/=]+)$")
+APRS_MSG_RE = re.compile(r"^:(.+):([A-Za-z0-9+/=]+)\{(\d{1,3})\}$")
+APRS_STATUS_RE = re.compile(r"^>([A-Za-z0-9+/=]+)$")
+APRS_BULLETIN_RE = re.compile(r"^:BLN\d:([A-Za-z0-9+/=]+)$")
+
+_APRS_VARIANTS = ("message", "status", "bulletin")
 
 
 @register_narrator
 class APRSNarrator(BBSBaseNarrator):
     """
-    APRS-style text message narrator.
+    APRS narrator emitting several plausible APRS packet types.
 
-    Encodes payload into APRS text messages:
-    - Small ctrl:  >DST>SRC:ACK:seq:base64
-    - Data:        >DST>SRC:DATA:seq:base64
+    Control (small) packets are sent as addressed APRS messages, which
+    resemble message retries/acks. Data packets cycle through message,
+    status, and bulletin formats so the cover traffic looks varied.
     """
 
     name = "aprs"
 
     def __init__(self, src_call: str, dst_call: str):
         super().__init__(src_call, dst_call)
-        self.msg_seq = random.randint(1, 1000)
-        self.last_ack_seq = 0
+        self.msg_seq = random.randint(1, 999)
+        self.variant_idx = 0
+
+    def _next_seq(self) -> str:
+        self.msg_seq = (self.msg_seq % 999) + 1
+        return f"{self.msg_seq:03d}"
+
+    def _next_variant(self) -> str:
+        variant = _APRS_VARIANTS[self.variant_idx % len(_APRS_VARIANTS)]
+        self.variant_idx += 1
+        return variant
+
+    def _format_message(self, b64: str) -> str:
+        return f":{self.dst_call}:{b64}{{{self._next_seq()}}}"
+
+    def _format_status(self, b64: str) -> str:
+        return f">{b64}"
+
+    def _format_bulletin(self, b64: str) -> str:
+        return f":BLN{random.randint(0, 9)}:{b64}"
 
     def format_packet(self, payload: bytes, is_small_ctrl: bool, part: int = 1, total: int = 1) -> str:
         b64 = base64.b64encode(payload).decode("ascii")
-        self.msg_seq = (self.msg_seq % 9999) + 1
-        seq = f"{self.msg_seq:04d}"
 
         if is_small_ctrl:
-            # Small ctrl packets appear as ACK messages
-            self.last_ack_seq = self.msg_seq
-            return f">{self.dst_call}>{self.src_call}:ACK:{seq}:{b64}"
-        else:
-            # Data packets appear as DATA messages
-            # If multi-part, include part/total in payload metadata
-            if total > 1:
-                # Encode part info into the message
-                return f">{self.dst_call}>{self.src_call}:DATA:{seq}:P{part:02d}T{total:02d}:{b64}"
-            return f">{self.dst_call}>{self.src_call}:DATA:{seq}:{b64}"
+            # Control packets look like addressed APRS messages (retries/acks)
+            return self._format_message(b64)
+
+        # Data packets cycle through plausible APRS types
+        variant = self._next_variant()
+        if variant == "message":
+            return self._format_message(b64)
+        if variant == "status":
+            return self._format_status(b64)
+        return self._format_bulletin(b64)
 
     def decode_packet(self, bbs_text: str) -> bytes | None:
-        # Try ACK format
-        m_ctrl = APRS_CTRL_RE.match(bbs_text.strip())
-        if m_ctrl:
+        text = bbs_text.strip()
+
+        # Addressed message: :ADDR:b64{SEQ}
+        m = APRS_MSG_RE.match(text)
+        if m:
             try:
-                return base64.b64decode(m_ctrl.group(4), validate=True)
+                return base64.b64decode(m.group(2), validate=True)
             except Exception:
                 return None
 
-        # Try DATA format (with or without part info)
-        m_data = APRS_DATA_RE.match(bbs_text.strip())
-        if m_data:
+        # Status report: >b64
+        m = APRS_STATUS_RE.match(text)
+        if m:
             try:
-                b64 = m_data.group(4)
-                # Strip part prefix if present
-                if b64.startswith("P") and "T" in b64:
-                    # Format: P01T03:actual_b64
-                    b64 = b64.split(":", 1)[1]
-                return base64.b64decode(b64, validate=True)
+                return base64.b64decode(m.group(1), validate=True)
             except Exception:
                 return None
+
+        # Bulletin: :BLNn:b64
+        m = APRS_BULLETIN_RE.match(text)
+        if m:
+            try:
+                return base64.b64decode(m.group(1), validate=True)
+            except Exception:
+                return None
+
         return None
 
 
