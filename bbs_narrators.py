@@ -4,14 +4,22 @@ Modular BBS narrator registry with pluggable narrator implementations.
 Each narrator encodes raw payload bytes into a plausible cover-traffic format
 and decodes it back. The proxy uses the registry to select a narrator by name
 (e.g., via env var BBS_NARRATOR).
+
+Plausible-deniability principles
+--------------------------------
+Real packet-radio traffic is inherently noisy and unpredictable: sequence
+numbers skip, message types appear at random, ACKs arrive without matching
+sends, and digipeat paths vary.  By mirroring that natural variation the
+narrators ensure an observer cannot reliably distinguish cover traffic from
+ordinary packet-radio chatter.  The non-determinism below is deliberate and
+must NOT be "cleaned up" into a predictable pattern.
 """
 
 from abc import ABC, abstractmethod
 import base64
 import re
-import textwrap
 import random
-import time
+import textwrap
 
 
 # --- Constants shared with proxy ---
@@ -70,7 +78,6 @@ CORRUPTION_NOTICES = [
     "*** Line noise detected (BAD FCS) - NAK sent",
     "*** Checksum error on block - re-syncing stream",
 ]
-
 
 BBSB7PLUS_CTRL_RE = re.compile(
     r"^ACK \d{2} \[([A-Za-z0-9+/=]+)\] OK - Send next block\rde [^>]+>\r$"
@@ -192,7 +199,11 @@ APRS_MSG_RE = re.compile(r"^:(.+):([A-Za-z0-9+/=]+)\{(\d{1,3})\}$")
 APRS_STATUS_RE = re.compile(r"^>([A-Za-z0-9+/=]+)$")
 APRS_BULLETIN_RE = re.compile(r"^:BLN\d:([A-Za-z0-9+/=]+)$")
 
-_APRS_VARIANTS = ("message", "status", "bulletin")
+# Weighted variant distribution for data packets — message is most common
+# (typical APRS), status/bulletin are less frequent but still plausible.
+# Deniability: the weights mean the *type* sequence is unpredictable, so an
+# observer cannot fingerprint the channel by packet-type patterns.
+_APRS_VARIANT_WEIGHTS = {"message": 0.6, "status": 0.25, "bulletin": 0.15}
 
 
 @register_narrator
@@ -201,8 +212,17 @@ class APRSNarrator(BBSBaseNarrator):
     APRS narrator emitting several plausible APRS packet types.
 
     Control (small) packets are sent as addressed APRS messages, which
-    resemble message retries/acks. Data packets cycle through message,
-    status, and bulletin formats so the cover traffic looks varied.
+    resemble message retries/acks. Data packets are emitted in a
+    weighted-random mix of message, status and bulletin formats so the
+    cover traffic looks varied and plausible.
+
+    Plausible-deniability features
+    ------------------------------
+    * Weighted-random variant selection (message > status > bulletin).
+    * Sequence-number jitter: msg numbers advance by a random 1-3 steps,
+      mimicking packets that are silently dropped/retried on a noisy RF
+      channel instead of a clean +1 counter an observer could track.
+    * Random bulletin IDs (BLN0..BLN9) so even the addressing varies.
     """
 
     name = "aprs"
@@ -210,40 +230,37 @@ class APRSNarrator(BBSBaseNarrator):
     def __init__(self, src_call: str, dst_call: str):
         super().__init__(src_call, dst_call)
         self.msg_seq = random.randint(1, 999)
-        self.variant_idx = 0
 
-    def _next_seq(self) -> str:
-        self.msg_seq = (self.msg_seq % 999) + 1
-        return f"{self.msg_seq:03d}"
+    def _next_seq(self) -> int:
+        """Advance the sequence counter by a random jittered amount."""
+        self.msg_seq = ((self.msg_seq - 1 + random.randint(1, 3)) % 999) + 1
+        return self.msg_seq
 
-    def _next_variant(self) -> str:
-        variant = _APRS_VARIANTS[self.variant_idx % len(_APRS_VARIANTS)]
-        self.variant_idx += 1
-        return variant
-
-    def _format_message(self, b64: str) -> str:
-        return f":{self.dst_call}:{b64}{{{self._next_seq()}}}"
-
-    def _format_status(self, b64: str) -> str:
-        return f">{b64}"
-
-    def _format_bulletin(self, b64: str) -> str:
-        return f":BLN{random.randint(0, 9)}:{b64}"
+    def _pick_variant(self) -> str:
+        """Weighted-randomly select an APRS variant for this packet."""
+        roll = random.random()
+        cum = 0.0
+        for variant, weight in _APRS_VARIANT_WEIGHTS.items():
+            cum += weight
+            if roll < cum:
+                return variant
+        return "message"
 
     def format_packet(self, payload: bytes, is_small_ctrl: bool, part: int = 1, total: int = 1) -> str:
         b64 = base64.b64encode(payload).decode("ascii")
+        seq = self._next_seq()
 
         if is_small_ctrl:
             # Control packets look like addressed APRS messages (retries/acks)
-            return self._format_message(b64)
+            return f":{self.dst_call}:{b64}{{{seq:03d}}}"
 
-        # Data packets cycle through plausible APRS types
-        variant = self._next_variant()
+        # Data packets use a weighted-random plausible APRS type
+        variant = self._pick_variant()
         if variant == "message":
-            return self._format_message(b64)
+            return f":{self.dst_call}:{b64}{{{seq:03d}}}"
         if variant == "status":
-            return self._format_status(b64)
-        return self._format_bulletin(b64)
+            return f">{b64}"
+        return f":BLN{random.randint(0, 9)}:{b64}"
 
     def decode_packet(self, bbs_text: str) -> bytes | None:
         text = bbs_text.strip()
