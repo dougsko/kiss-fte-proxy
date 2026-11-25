@@ -155,20 +155,56 @@ def read_kiss_frames(sock: socket.socket):
 
 
 # --- Reassembly & Proxy Session ---
+MAX_PENDING_MESSAGES = 256  # Cap on in-flight transfers to bound memory usage
+
+
 class ReassemblyBuffer:
-    def __init__(self, timeout: float = 30.0):
+    def __init__(self, timeout: float = 30.0, max_pending: int = MAX_PENDING_MESSAGES):
         self.pending: dict[int, tuple[float, int, dict[int, bytes]]] = {}
         self.timeout = timeout
+        self.max_pending = max_pending
 
-    def add_chunk(self, msg_id: int, idx: int, total: int, data: bytes) -> bytes | None:
-        now = time.monotonic()
+    def _evict_expired(self, now: float) -> None:
         for k in [k for k, (ts, _, _) in self.pending.items() if now - ts > self.timeout]:
             del self.pending[k]
 
+    def _evict_oldest(self) -> None:
+        oldest = min(self.pending, key=lambda k: self.pending[k][0])
+        del self.pending[oldest]
+
+    def add_chunk(self, msg_id: int, idx: int, total: int, data: bytes) -> bytes | None:
+        # Framing-level validation (idx/total are packed as unsigned bytes "!HBB").
+        if not (0 <= msg_id <= 0xFFFF):
+            return None
+        if total <= 0 or total > 0xFF:
+            return None
+        if idx < 0 or idx >= total:
+            return None
+
+        now = time.monotonic()
+        self._evict_expired(now)
+
         if msg_id not in self.pending:
+            if len(self.pending) >= self.max_pending:
+                self._evict_oldest()
             self.pending[msg_id] = (now, total, {})
         _, exp_total, chunks = self.pending[msg_id]
+
+        # A transfer already in flight must keep the same declared total;
+        # a mismatch means corruption or a reused msg_id -- discard it.
+        if total != exp_total:
+            del self.pending[msg_id]
+            return None
+
+        if idx in chunks:
+            # Duplicate chunk: identical retransmission -> ignore (keep first copy).
+            # Different payload for same idx -> msg_id collision / corruption -> drop transfer.
+            if chunks[idx] != data:
+                del self.pending[msg_id]
+            return None
+
         chunks[idx] = data
+        self.pending[msg_id] = (now, exp_total, chunks)
 
         if len(chunks) == exp_total:
             del self.pending[msg_id]
