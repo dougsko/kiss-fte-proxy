@@ -150,7 +150,7 @@ def read_kiss_frames(sock: socket.socket):
                 break
             raw_frame = bytes(buf[1:end])
             del buf[: end + 1]
-            if len(raw_frame) > 1 and (raw_frame & 0x0F) == 0x00:
+            if len(raw_frame) > 1 and (raw_frame[0] & 0x0F) == 0x00:
                 yield kiss_unescape(raw_frame[1:])
 
 
