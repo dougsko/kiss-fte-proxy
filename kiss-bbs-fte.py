@@ -8,6 +8,11 @@ import textwrap
 import time
 import random
 
+from bbs_narrators import (
+    FEND, FESC, TFEND, TFESC,
+    create_narrator_from_env,
+)
+
 # --- Configuration (environment-overridable for two-node tests) ---
 APP_LISTEN_ADDR = (os.getenv("APP_HOST", "127.0.0.1"), int(os.getenv("APP_PORT", "8001")))
 TNC_TARGET_ADDR = (os.getenv("TNC_HOST", "127.0.0.1"), int(os.getenv("TNC_PORT", "8002")))
@@ -16,118 +21,6 @@ DST_CALL = os.getenv("DST_CALL", "BBS-1")
 
 SMALL_CTRL_THRESHOLD = int(os.getenv("SMALL_CTRL_THRESHOLD", "32"))
 MAX_PLAINTEXT_CHUNK = int(os.getenv("MAX_PLAINTEXT_CHUNK", "110"))
-FEND, FESC, TFEND, TFESC = 0xC0, 0xDB, 0xDC, 0xDD
-
-# --- Realistic BBS Narrative Generator ---
-FILE_TEMPLATES = [
-    ("SYSUPD", "ZIP"),
-    ("WXMAPS", "GIF"),
-    ("NODELST", "LZH"),
-    ("BPQCFG", "TGZ"),
-    ("PROPAG", "DAT"),
-]
-
-CORRUPTION_NOTICES = [
-    "*** Frame CRC mismatch - requesting block retry",
-    "*** Line noise detected (BAD FCS) - NAK sent",
-    "*** Checksum error on block - re-syncing stream",
-]
-
-
-class BBSNarrator:
-    """Maintains a believable sequential 7PLUS file upload narrative across packets."""
-
-    def __init__(self, src_call: str, dst_call: str):
-        self.src_call = src_call
-        self.dst_call = dst_call
-        self.file_seq = random.randint(1, 20)
-        self.part_num = 1
-        self.part_tot = random.randint(8, 16)
-        self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
-        self.filename = self._next_filename()
-        self.last_part_num = 1
-
-    def _next_filename(self) -> str:
-        prefix, ext = random.choice(FILE_TEMPLATES)
-        fname = f"{prefix}{self.file_seq:02d}.{ext}"
-        self.file_seq = (self.file_seq % 99) + 1
-        return fname
-
-    def format_packet(self, payload: bytes, is_small_ctrl: bool, part: int = 1, total: int = 1) -> str:
-        b64 = base64.b64encode(payload).decode("ascii")
-
-        if is_small_ctrl:
-            return (
-                f"ACK {self.last_part_num:02d} [{b64}] OK - Send next block\r"
-                f"de {self.src_call}>\r"
-            )
-
-        lines = ["M" + line for line in textwrap.wrap(b64, width=62)]
-        body = "\r".join(lines)
-        block_crc = f"{random.randint(0, 0xFFFF):04X}"
-        curr_part = part if total > 1 else self.part_num
-        status_line = ""
-
-        if total == 1:
-            curr_part = self.part_num
-            self.last_part_num = curr_part
-            self.part_num = 1
-            self.part_tot = random.randint(8, 16)
-            self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
-            self.filename = self._next_filename()
-        elif curr_part == self.part_tot:
-            status_line = f"7PLUS extraction complete - {self.filename} saved\r"
-            self.part_num = 1
-            self.part_tot = random.randint(8, 16)
-            self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
-            self.filename = self._next_filename()
-        else:
-            simulate_retry = (curr_part < self.part_tot) and (random.random() < 0.15)
-            if simulate_retry:
-                status_line = f"{random.choice(CORRUPTION_NOTICES)}\r"
-            else:
-                status_line = ""
-                self.part_num += 1
-
-        return (
-            f" go_7+. {curr_part:02d} of {total if total > 1 else self.part_tot:02d} "
-            f"{self.filename} 00512 {self.file_crc}\r"
-            f"{body}\r"
-            f"{status_line}"
-            f" stop_7+. ({self.file_crc}/{block_crc})\r"
-            f"de {self.dst_call}>\r"
-        )
-
-
-CTRL_PARSE_RE = re.compile(r"^ACK \d{2} \[([A-Za-z0-9+/=]+)\] OK - Send next block\rde [^>]+>\r$")
-
-DATA_PARSE_RE = re.compile(
-    r"^ go_7\+\. \d{2} of \d{2} [A-Z0-9_.]+ \d{5} [0-9A-F]{4}\r"
-    r"([\s\S]+?)\r"
-    r"(?:(?:\*\*\* [^\r]+|7PLUS extraction complete - [^\r]+)\r)?"
-    r" stop_7\+\. \([0-9A-F]{4}/[0-9A-F]{4}\)\r"
-    r"de [^>]+>\r$"
-)
-
-
-def decode_bbs_packet(bbs_text: str):
-    m_ctrl = CTRL_PARSE_RE.match(bbs_text)
-    if m_ctrl:
-        try:
-            return base64.b64decode(m_ctrl.group(1), validate=True)
-        except Exception:
-            return None
-    m_data = DATA_PARSE_RE.match(bbs_text)
-    if not m_data:
-        return None
-    lines = m_data.group(1).split("\r")
-    if not all(line.startswith("M") for line in lines if line):
-        return None
-    b64_str = "".join(line[1:] for line in lines if line)
-    try:
-        return base64.b64decode(b64_str, validate=True)
-    except Exception:
-        return None
 
 
 def kiss_escape(data: bytes) -> bytes:
@@ -257,7 +150,7 @@ def handle_session(app_sock: socket.socket):
     tnc_sock.settimeout(None)
     reassembler = ReassemblyBuffer()
     tx_msg_id = random.randint(0, 65535)
-    bbs_narrator = BBSNarrator(SRC_CALL, DST_CALL)
+    narrator = create_narrator_from_env(SRC_CALL, DST_CALL)
 
     def app_to_tnc():
         nonlocal tx_msg_id
@@ -272,7 +165,7 @@ def handle_session(app_sock: socket.socket):
                     raise ValueError("frame exceeds 255-chunk protocol limit")
                 for idx, chunk in enumerate(chunks):
                     framed = struct.pack("!HBB", tx_msg_id, idx, total) + chunk
-                    bbs_text = bbs_narrator.format_packet(
+                    bbs_text = narrator.format_packet(
                         framed, is_small_ctrl, idx + 1, total
                     ).encode("ascii")
                     ax25_out = wrap_ax25_ui(bbs_text)
@@ -292,7 +185,7 @@ def handle_session(app_sock: socket.socket):
                 info = unwrap_ax25_ui(ax25_frame)
                 if info is None:
                     continue
-                framed = decode_bbs_packet(info.decode("ascii", errors="ignore"))
+                framed = narrator.decode_packet(info.decode("ascii", errors="ignore"))
                 if framed is None or len(framed) < 4:
                     continue
                 msg_id, idx, total = struct.unpack("!HBB", framed[:4])

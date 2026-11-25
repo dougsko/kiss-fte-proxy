@@ -1,6 +1,7 @@
 FROM docker.io/library/python:3.12-slim
 WORKDIR /app
 COPY ./kiss-bbs-fte.py /app/kiss-bbs-fte.py
+COPY ./bbs_narrators.py /app/bbs_narrators.py
 COPY tests/kiss_bridge.py /app/kiss_bridge.py
 COPY tests/e2e.py /app/e2e.py
 CMD ["python", "/app/kiss-bbs-fte.py"]
