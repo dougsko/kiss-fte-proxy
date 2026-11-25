@@ -20,7 +20,9 @@ PCAP_PATH = os.getenv("PCAP_PATH", "/artifacts/transport.pcap")
 def connect_retry(host, port):
     while True:
         try:
-            return socket.create_connection((host, port), timeout=2)
+            sock = socket.create_connection((host, port), timeout=2)
+            sock.settimeout(None)
+            return sock
         except OSError:
             time.sleep(0.5)
 
