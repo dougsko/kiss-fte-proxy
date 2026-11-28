@@ -1,122 +1,78 @@
 # KISS FTE Proxy
 
-A Python proxy that bridges a TCP KISS upstream (listening on 127.0.0.1:8001) to a Direwolf/TNC KISS port (127.0.0.1:8002).
-
-Whatever raw bytes an upstream KISS client sends are accepted as-is. The proxy chunks the byte stream, prefixes each chunk with a 4-byte sequencing header, Base64-encodes it, wraps it in AX.25 7PLUS UI frames (`go_7+ ... stop_7+`), KISS-escapes the special bytes, and sends it out to the target KISS port. Every byte that comes in goes out in BBS format, unchanged. Optional ChaCha20 stream cipher encryption can be enabled with `--encrypt` / `--key`.
+A Python proxy that bridges a TCP KISS upstream (default `127.0.0.1:8001`) to a Direwolf/TNC KISS port (default `127.0.0.1:8002`). It applies **observation-based FTE encoding** (format-transforming encryption) to payloads and wraps them in plausible cover traffic (BBS/APRS, HTTP, Telnet) over AX.25 UI frames. Optional **ChaCha20 stream cipher encryption** adds a second encryption layer.
 
 ## Features
-- KISS ↔ TCP bridging
-- Optional ChaCha20 stream cipher encryption (`--encrypt` / `--key` – passphrase or hex key)
-- Automatic chunking / reassembly (`MAX_PLAINTEXT_CHUNK = 110` bytes)
-- AX.25 UI framing with KISS escaping/unescaping
-- BBS-style control frame short-circuit (`SMALL_CTRL_THRESHOLD = 32` bytes)
 
-## Requirements and Installation
-This project requires the `cryptography` package for ChaCha20 encryption support. Install dependencies using Python's built-in `venv` module:
+- **KISS ↔ TCP bridging** — transparent frame forwarding
+- **FTE always enabled** — payload bits encoded into observed protocol vocabularies (from `samples/*.json`)
+- **Multiple cover protocols** — BBS/APRS (`bbs`), HTTP (`http`), Telnet (`telnet`), or rotating (`rotate`)
+- **Optional ChaCha20 encryption** — `--encrypt --key "passphrase"` (nonce auto-derived from key)
+- **Automatic chunking/reassembly** — 110-byte plaintext chunks, 255-chunk max per frame
+- **AX.25 UI framing + KISS escape/unescape** — correct FEND/FESC handling
+
+## Quick Start (Python)
 
 ```bash
-# Create a virtual environment
-python3 -m venv venv
-
-# Activate the virtual environment
-# Linux/macOS:
-source venv/bin/activate
-# Windows:
-venv\Scripts\activate
-
-# Install dependencies
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Run the proxy
+# Plain FTE (BBS cover, no extra encryption)
 python3 kiss-bbs-fte.py
+
+# With ChaCha20 encryption (passphrase key, deterministic nonce)
+python3 kiss-bbs-fte.py --encrypt --key "my-secret-passphrase"
+
+# Different cover protocol
+python3 kiss-bbs-fte.py --cover http --max-cover-msg 200
 ```
 
-The encryption feature derives a deterministic nonce from the shared key — no configuration or environment variable needed. Just provide a key via `--key` or the `CHACHA20_KEY` environment variable, and both peers will independently compute the same nonce.
-
-## Quick Start
-```bash
-python3 kiss-bbs-fte.py
+Configure via environment variables or CLI flags:
+```
+APP_HOST=127.0.0.1  APP_PORT=8001
+TNC_HOST=127.0.0.1  TNC_PORT=8002
+SRC_CALL=NODE1-1    DST_CALL=BBS-1
+COVER_PROTO=bbs     MAX_COVER_MSG=200
+BBS_NARRATOR=bbs7plus  (or aprs)
+CHACHA20_KEY=passphrase  (for --encrypt)
 ```
 
-Configure the endpoints and call signs at the top of the script:
-```python
-APP_LISTEN_ADDR = ("127.0.0.1", 8001)   # Upstream app (TCP KISS)
-TNC_TARGET_ADDR = ("127.0.0.1", 8002)   # Direwolf / TNC KISS port
-SRC_CALL = "NODE1-1"
-DST_CALL = "BBS-1"
-```
-
-Connect your upstream KISS application (or any app that speaks KISS over TCP) to `127.0.0.1:8001`. All frames it sends are encoded into BBS base64 AX.25 UI packets and forwarded to `127.0.0.1:8002`; replies are decoded back and sent to the upstream app.
-
-## Container / Quadlet
-
-Pre-built images are published to **ghcr.io/dougsko/kiss-fte-proxy** with tags `latest`, `sha-<short>`, and semver tags from Git releases.
-
-### Using the image directly
+## Run via Container
 
 ```bash
-# Pull and run with defaults (host networking, env file optional)
+# Pre-built image
 podman pull ghcr.io/dougsko/kiss-fte-proxy:latest
 
-# Run with host networking (proxy binds 127.0.0.1:8001, reaches Direwolf on 127.0.0.1:8002)
+# Host networking (typical: Direwolf on host)
 podman run --rm --network host \
   -e APP_HOST=127.0.0.1 -e APP_PORT=8001 \
   -e TNC_HOST=127.0.0.1 -e TNC_PORT=8002 \
   -e SRC_CALL=NODEA-1 -e DST_CALL=NODEB-1 \
-  -e BBS_NARRATOR=bbs7plus \
-  ghcr.io/dougsko/kiss-fte-proxy:latest
+  -e CHACHA20_KEY="my-passphrase" \
+  ghcr.io/dougsko/kiss-fte-proxy:latest \
+  --encrypt
 ```
 
-### Using the Quadlet (systemd service)
-
-The `quadlet/` directory contains a ready-to-use systemd-generated container unit:
+## Run via Quadlet (systemd)
 
 ```bash
-# 1. Install the quadlet unit (user or system mode)
 mkdir -p ~/.config/containers/systemd/
 cp quadlet/kiss-fte-proxy.container ~/.config/containers/systemd/
-
-# 2. Create the environment file
 mkdir -p /etc/kiss-fte-proxy/
 cp quadlet/kiss-fte-proxy.env.example /etc/kiss-fte-proxy/kiss-fte-proxy.env
-# Edit /etc/kiss-fte-proxy/kiss-fte-proxy.env as needed
-
-# 3. Reload systemd and start
+# Edit env file as needed
 systemctl --user daemon-reload
 systemctl --user enable --now kiss-fte-proxy.service
 ```
 
-The quadlet uses **host networking** so the proxy binds directly on the host's `APP_PORT` (default `8001`) and connects to `TNC_HOST:TNC_PORT` (default `127.0.0.1:8002`) — matching a typical host-running Direwolf. To expose the proxy on all interfaces, set `APP_HOST=0.0.0.0` in the env file.
+## Encryption Notes
 
-#### Alternative: Bridge network (Direwolf in another container)
-
-If Direwolf runs in a separate container, create a Podman network quadlet and reference it:
-
-```ini
-# quadlet/kiss-fte-proxy.network
-[Network]
-Driver=bridge
-
-# quadlet/kiss-fte-proxy.container (bridge variant)
-[Container]
-Image=ghcr.io/dougsko/kiss-fte-proxy:latest
-AutoUpdate=registry
-EnvironmentFile=/etc/kiss-fte-proxy/kiss-fte-proxy.env
-Network=kiss-fte-proxy.network
-PublishPort=8001:8001
-```
-
-Set `TNC_HOST=direwolf` (the container name) in the env file.
-
-### Auto-updates
-
-The quadlet includes `AutoUpdate=registry` and the corresponding label. With `podman-auto-update` enabled, systemd will automatically pull new images and restart the service:
-
-```bash
-# Enable daily auto-update check
-systemctl --user enable --now podman-auto-update.timer
-```
+- `--encrypt` enables ChaCha20 stream cipher (bare, no AEAD) around the FTE payload
+- `--key` accepts a **passphrase** (any string, SHA-256 → 32-byte key) or **64-char hex key**
+- Nonce is **derived deterministically** from the key: `SHA256(key + b"kiss-fte-nonce")[:16]`
+- Both peers sharing the same passphrase compute identical key+nonce — no nonce config needed
 
 ## Requirements
+
 - Python 3.8+
-- `pip install -r requirements.txt` (install in a virtual environment)
+- `pip install -r requirements.txt` (cryptography)
