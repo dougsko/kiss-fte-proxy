@@ -1,7 +1,11 @@
 FROM docker.io/library/python:3.12-slim
 WORKDIR /app
+RUN pip install --no-cache-dir cryptography
 COPY ./kiss-bbs-fte.py /app/kiss-bbs-fte.py
 COPY ./bbs_narrators.py /app/bbs_narrators.py
-COPY tests/kiss_bridge.py /app/kiss_bridge.py
-COPY tests/e2e.py /app/e2e.py
+COPY ./cover_codecs.py /app/cover_codecs.py
+COPY ./tools /app/tools
+COPY ./samples /app/samples
+COPY ./tests/kiss_bridge.py /app/kiss_bridge.py
+COPY ./tests/e2e.py /app/e2e.py
 CMD ["python", "/app/kiss-bbs-fte.py"]

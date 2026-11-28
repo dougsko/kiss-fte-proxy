@@ -79,12 +79,13 @@ CORRUPTION_NOTICES = [
     "*** Checksum error on block - re-syncing stream",
 ]
 
+
 BBSB7PLUS_CTRL_RE = re.compile(
     r"^ACK \d{2} \[([A-Za-z0-9+/=]+)\] OK - Send next block\rde [^>]+>\r$"
 )
 
 BBSB7PLUS_DATA_RE = re.compile(
-    r"^ go_7\+\. \d{2} of \d{2} [A-Z0-9_.]+ \d{5} [0-9A-F]{4}\r"
+    r"^ go_7\+\. \d{2,3} of \d{1,3} [A-Z0-9_.]+ \d{5} [0-9A-F]{4}\r"
     r"([\s\S]+?)\r"
     r"(?:(?:\*\*\* [^\r]+|7PLUS extraction complete - [^\r]+)\r)?"
     r" stop_7\+\. \([0-9A-F]{4}/[0-9A-F]{4}\)\r"
@@ -105,7 +106,6 @@ class BBSB7PlusNarrator(BBSBaseNarrator):
         self.part_tot = random.randint(8, 16)
         self.file_crc = f"{random.randint(0, 0xFFFF):04X}"
         self.filename = self._next_filename()
-        self.last_part_num = 1
 
     def _next_filename(self) -> str:
         prefix, ext = random.choice(FILE_TEMPLATES)
@@ -150,7 +150,7 @@ class BBSB7PlusNarrator(BBSBaseNarrator):
                 self.part_num += 1
 
         return (
-            f" go_7+. {curr_part:02d} of {total if total > 1 else self.part_tot:02d} "
+            f" go_7+. {curr_part:02d} of {total if total > 1 else 1} "
             f"{self.filename} 00512 {self.file_crc}\r"
             f"{body}\r"
             f"{status_line}"
@@ -191,7 +191,7 @@ class BBSB7PlusNarrator(BBSBaseNarrator):
 #   Bulletin  :BLNn:payload           APRS bulletin
 #
 # The narrator rotates through these formats so cover traffic looks varied
-# and plausible rather than repeating a single template. The part/total
+# and plausible rather than repeating a single template.  The part/total
 # bookkeeping lives in the proxy's outer framing (struct.pack('!HBB', ...)),
 # so the narrator only needs to round-trip the framed bytes.
 

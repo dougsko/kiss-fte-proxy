@@ -1,0 +1,3 @@
+# Core dependencies for KISS FTE Proxy
+# cryptography provides ChaCha20 stream cipher support
+cryptography>=42.0.0

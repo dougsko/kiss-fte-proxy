@@ -2,14 +2,36 @@
 
 A Python proxy that bridges a TCP KISS upstream (listening on 127.0.0.1:8001) to a Direwolf/TNC KISS port (127.0.0.1:8002).
 
-Whatever raw bytes an upstream KISS client sends are accepted as-is — there is **no encryption** and no ciphertext. The proxy chunks the byte stream, prefixes each chunk with a 4-byte sequencing header, Base64-encodes it, wraps it in AX.25 7PLUS UI frames (`go_7+ ... stop_7+`), KISS-escapes the special bytes, and sends it out to the target KISS port. Every byte that comes in goes out in BBS format, unchanged.
+Whatever raw bytes an upstream KISS client sends are accepted as-is. The proxy chunks the byte stream, prefixes each chunk with a 4-byte sequencing header, Base64-encodes it, wraps it in AX.25 7PLUS UI frames (`go_7+ ... stop_7+`), KISS-escapes the special bytes, and sends it out to the target KISS port. Every byte that comes in goes out in BBS format, unchanged. Optional ChaCha20 stream cipher encryption can be enabled with `--encrypt` / `--key`.
 
 ## Features
 - KISS ↔ TCP bridging
-- Arbitrary binary input – pass-through of raw bytes, no AES/encryption
+- Optional ChaCha20 stream cipher encryption (`--encrypt` / `--key` – passphrase or hex key)
 - Automatic chunking / reassembly (`MAX_PLAINTEXT_CHUNK = 110` bytes)
 - AX.25 UI framing with KISS escaping/unescaping
 - BBS-style control frame short-circuit (`SMALL_CTRL_THRESHOLD = 32` bytes)
+
+## Requirements and Installation
+This project requires the `cryptography` package for ChaCha20 encryption support. Install dependencies using Python's built-in `venv` module:
+
+```bash
+# Create a virtual environment
+python3 -m venv venv
+
+# Activate the virtual environment
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the proxy
+python3 kiss-bbs-fte.py
+```
+
+The encryption feature derives a deterministic nonce from the shared key — no configuration or environment variable needed. Just provide a key via `--key` or the `CHACHA20_KEY` environment variable, and both peers will independently compute the same nonce.
 
 ## Quick Start
 ```bash
@@ -97,4 +119,4 @@ systemctl --user enable --now podman-auto-update.timer
 
 ## Requirements
 - Python 3.8+
-- Standard library only (no `cryptography` dependency)
+- `pip install -r requirements.txt` (install in a virtual environment)

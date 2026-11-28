@@ -35,11 +35,15 @@ podman run -d --name proxy-a --network "$NETWORK" \
   -e APP_HOST=0.0.0.0 -e APP_PORT=8001 \
   -e TNC_HOST=direwolf-a -e TNC_PORT=8001 \
   -e SRC_CALL=NODEA-1 -e DST_CALL=NODEB-1 \
+  -e COVER_PROTO="${COVER_PROTO:-bbs}" \
+  -e MAX_COVER_MSG="${MAX_COVER_MSG:-200}" \
   "$IMAGE" >/dev/null
 podman run -d --name proxy-b --network "$NETWORK" \
   -e APP_HOST=0.0.0.0 -e APP_PORT=8001 \
   -e TNC_HOST=direwolf-b -e TNC_PORT=8001 \
   -e SRC_CALL=NODEB-1 -e DST_CALL=NODEA-1 \
+  -e COVER_PROTO="${COVER_PROTO:-bbs}" \
+  -e MAX_COVER_MSG="${MAX_COVER_MSG:-200}" \
   "$IMAGE" >/dev/null
 
 podman run -d --name kiss-bridge --network "$NETWORK" \

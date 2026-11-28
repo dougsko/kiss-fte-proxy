@@ -1,0 +1,658 @@
+{
+  "per_file": {
+    "pcap/http.cap": {
+      "http_messages": 4,
+      "telnet_cmds": 0,
+      "streams": 4
+    },
+    "pcap/http_gzip.cap": {
+      "http_messages": 2,
+      "telnet_cmds": 0,
+      "streams": 2
+    },
+    "pcap/http-chunked-gzip.pcap": {
+      "http_messages": 2,
+      "telnet_cmds": 0,
+      "streams": 2
+    },
+    "pcap/telnet-raw.pcap": {
+      "http_messages": 0,
+      "telnet_cmds": 51,
+      "streams": 2
+    },
+    "/tmp/http_redirects.pcap": {
+      "http_messages": 96,
+      "telnet_cmds": 0,
+      "streams": 96
+    }
+  },
+  "capacity_bits_per_message": 65.43,
+  "fields": {
+    "http.method": {
+      "GET": 52
+    },
+    "http.request_version": {
+      "HTTP/1.1": 52
+    },
+    "http.target": {
+      "/download.html": 1,
+      "/pagead/ads?client=ca-pub-2309191948673629&random=1084443430285&lmt=1082467020&format=468x60_as&output=html&url=http%3A%2F%2Fwww.ethereal.com%2Fdownload.html&color_bg=FFFFFF&color_text=333333&color_link=000000&color_url=666633&color_border=666633": 1,
+      "/test/ethereal.html": 1,
+      "/": 18,
+      "/?path=foo": 1,
+      "/foo": 1,
+      "/my/path?path=foobar": 2,
+      "/my/foobar": 2,
+      "/?path=g:h": 1,
+      "/b/c/d;p?q&path=g:h": 1,
+      "/b/c/d;p?q&path=g": 2,
+      "/b/c/g": 5,
+      "/b/c/d;p?q&path=./g": 1,
+      "/b/c/d;p?q&path=g/": 1,
+      "/b/c/g/": 1,
+      "/b/c/d;p?q&path=/g": 1,
+      "/g": 1,
+      "/b/c/d;p?q&path=//g": 1,
+      "/b/c/d;p?q&path=?y": 1,
+      "/b/c/d;p?y": 1,
+      "/b/c/d;p?q&path=g?y": 2,
+      "/b/c/g?y": 2,
+      "/b/c/d;p?q&path=": 1,
+      "/b/c/d;p?q&path=;x": 1,
+      "/b/c/d;p?q&path=g;x": 1,
+      "/b/c/d;p?q&path=g;x?y": 1
+    },
+    "http.header_name": {
+      "Host": 52,
+      "User-Agent": 52,
+      "Accept": 52,
+      "Accept-Language": 51,
+      "Accept-Encoding": 52,
+      "Accept-Charset": 3,
+      "Keep-Alive": 4,
+      "Connection": 55,
+      "Referer": 2,
+      "Date": 52,
+      "Server": 52,
+      "Last-Modified": 2,
+      "ETag": 2,
+      "Accept-Ranges": 2,
+      "Content-Length": 2,
+      "Content-Type": 4,
+      "P3P": 1,
+      "Content-Encoding": 3,
+      "Cache-control": 2,
+      "Content-length": 1,
+      "Cookie": 1,
+      "Vary": 2,
+      "Transfer-Encoding": 1,
+      "Set-Cookie": 1,
+      "X-Frame-Options": 1,
+      "Strict-Transport-Security": 1,
+      "X-Slogan": 2,
+      "X-Mod-Pagespeed": 1,
+      "CF-RAY": 1,
+      "Upgrade-Insecure-Requests": 48,
+      "Location": 31
+    },
+    "http.header_value.host": {
+      "www.ethereal.com": 1,
+      "pagead2.googlesyndication.com": 1,
+      "cerberus": 1,
+      "www.wireshark.org:8080": 1,
+      "127.0.0.1": 48
+    },
+    "http.header_value.user-agent": {
+      "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.6) Gecko/20040113": 2,
+      "Mozilla/5.0 (X11; U; Linux ppc; rv:1.7.3) Gecko/20041004 Firefox/0.10.1": 1,
+      "curl/7.46.0": 1,
+      "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:59.0) Gecko/20100101 Firefox/59.0": 48
+    },
+    "http.header_value.accept": {
+      "text/xml,application/xml,application/xhtml+xml,text/html;q=0.9,text/plain;q=0.8,": 3,
+      "*/*": 1,
+      "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8": 48
+    },
+    "http.header_value.accept-language": {
+      "en-us,en;q=0.5": 3,
+      "en-US,en;q=0.5": 48
+    },
+    "http.header_value.accept-encoding": {
+      "gzip,deflate": 3,
+      "chunked, gzip": 1,
+      "gzip, deflate": 48
+    },
+    "http.header_value.accept-charset": {
+      "ISO-8859-1,utf-8;q=0.7,*;q=0.7": 3
+    },
+    "http.header_value.keep-alive": {
+      "300": 3,
+      "timeout=15, max=100": 1
+    },
+    "http.header_value.connection": {
+      "keep-alive": 51,
+      "Keep-Alive": 1,
+      "close": 3
+    },
+    "http.header_value.referer": {
+      "http://www.ethereal.com/development.html": 1,
+      "http://www.ethereal.com/download.html": 1
+    },
+    "http.response_version": {
+      "HTTP/1.1": 4,
+      "HTTP/1.0": 48
+    },
+    "http.status": {
+      "200": 21,
+      "302": 31
+    },
+    "http.reason": {
+      "OK": 21,
+      "Found": 31
+    },
+    "http.header_value.date": {
+      "Thu, 13 May 2004 10:17:12 GMT": 1,
+      "Thu, 13 May 2004 10:17:14 GMT": 1,
+      "Fri, 29 Oct 2004 05:21:00 GMT": 1,
+      "Wed, 06 Jan 2016 20:42:10 GMT": 1,
+      "Wed, 28 Mar 2018 02:37:41 GMT": 1,
+      "Wed, 28 Mar 2018 02:37:51 GMT": 3,
+      "Wed, 28 Mar 2018 17:13:11 GMT": 3,
+      "Wed, 28 Mar 2018 17:13:37 GMT": 3,
+      "Wed, 28 Mar 2018 17:18:25 GMT": 1,
+      "Wed, 28 Mar 2018 17:18:30 GMT": 1,
+      "Wed, 28 Mar 2018 17:19:15 GMT": 1,
+      "Wed, 28 Mar 2018 17:19:20 GMT": 3,
+      "Wed, 28 Mar 2018 17:19:32 GMT": 3,
+      "Wed, 28 Mar 2018 17:19:38 GMT": 3,
+      "Wed, 28 Mar 2018 17:19:44 GMT": 3,
+      "Wed, 28 Mar 2018 17:19:50 GMT": 1,
+      "Wed, 28 Mar 2018 17:20:14 GMT": 3,
+      "Wed, 28 Mar 2018 17:20:23 GMT": 3,
+      "Wed, 28 Mar 2018 17:20:34 GMT": 2,
+      "Wed, 28 Mar 2018 17:20:41 GMT": 3,
+      "Wed, 28 Mar 2018 17:20:55 GMT": 3,
+      "Wed, 28 Mar 2018 17:21:04 GMT": 2,
+      "Wed, 28 Mar 2018 17:21:08 GMT": 3,
+      "Wed, 28 Mar 2018 17:21:20 GMT": 3
+    },
+    "http.header_value.server": {
+      "Apache": 1,
+      "CAFE/1.0": 1,
+      "Apache/2.0.50 (Fedora)": 1,
+      "cloudflare-nginx": 1,
+      "SimpleHTTP/0.6 Python/2.7.14": 48
+    },
+    "http.header_value.last-modified": {
+      "Tue, 20 Apr 2004 13:17:00 GMT": 1,
+      "Fri, 29 Oct 2004 05:20:21 GMT": 1
+    },
+    "http.header_value.etag": {
+      "\"9a01a-4696-7e354b00\"": 1,
+      "\"126e1f-6d-371b2f40\"": 1
+    },
+    "http.header_value.accept-ranges": {
+      "bytes": 2
+    },
+    "http.header_value.content-length": {
+      "18070": 1,
+      "1272": 1,
+      "92": 1
+    },
+    "http.header_value.content-type": {
+      "text/html; charset=ISO-8859-1": 2,
+      "text/html; charset=UTF-8": 1,
+      "text/html": 1
+    },
+    "http.query_key": {
+      "client": 1,
+      "random": 1,
+      "lmt": 1,
+      "format": 1,
+      "output": 1,
+      "url": 1,
+      "color_bg": 1,
+      "color_text": 1,
+      "color_link": 1,
+      "color_url": 1,
+      "color_border": 1,
+      "path": 18,
+      "q": 14,
+      "y": 3
+    },
+    "http.query_value": {
+      "ca-pub-2309191948673629": 1,
+      "1084443430285": 1,
+      "1082467020": 1,
+      "468x60_as": 1,
+      "html": 1,
+      "http%3A%2F%2Fwww.ethereal.com%2Fdownload.html": 1,
+      "FFFFFF": 1,
+      "333333": 1,
+      "000000": 1,
+      "666633": 2,
+      "foo": 1,
+      "foobar": 2,
+      "g:h": 2,
+      "g": 2,
+      "./g": 1,
+      "g/": 1,
+      "/g": 1,
+      "//g": 1,
+      "?y": 1,
+      "g?y": 2,
+      ";x": 1,
+      "g;x": 1,
+      "g;x?y": 1
+    },
+    "http.header_value.p3p": {
+      "policyref=\"http://www.googleadservices.com/pagead/p3p.xml\", CP=\"NOI DEV PSA PSD ": 1
+    },
+    "http.header_value.content-encoding": {
+      "gzip": 3
+    },
+    "http.header_value.cache-control": {
+      "private, x-gzip-ok=\"\"": 1,
+      "max-age=0, no-cache, no-store": 1
+    },
+    "http.header_value.cookie": {
+      "FGNCLIID=05c04axp1yaqynldtcdiwis0ag1": 1
+    },
+    "http.header_value.vary": {
+      "Accept-Encoding": 2
+    },
+    "http.header_value.transfer-encoding": {
+      "chunked": 1
+    },
+    "http.header_value.set-cookie": {
+      "__cfduid=d8d37b52eaa3137bdfd7fd67a4ffc8a7a1452112929; expires=Thu, 05-Jan-17 20:": 1
+    },
+    "http.header_value.x-frame-options": {
+      "SAMEORIGIN": 1
+    },
+    "http.header_value.strict-transport-security": {
+      "max-age=31536000;": 1
+    },
+    "http.header_value.x-slogan": {
+      "It's a great product with a great story to tell. I'm pumped!": 1,
+      "Go deep.": 1
+    },
+    "http.header_value.x-mod-pagespeed": {
+      "1.9.32.11-7550": 1
+    },
+    "http.header_value.cf-ray": {
+      "260a3f709d7b0761-AMS": 1
+    },
+    "telnet.command": {
+      "DO": 16,
+      "WILL": 12,
+      "WONT": 6,
+      "SB": 14,
+      "DONT": 3
+    },
+    "telnet.option": {
+      "SUPPRESS-GO-AHEAD": 3,
+      "TERMINAL-TYPE": 2,
+      "NAWS": 2,
+      "TSPEED": 2,
+      "LFLOW": 2,
+      "LINEMODE": 4,
+      "NEW-ENVIRON": 2,
+      "STATUS": 2,
+      "XDISPLOC": 2,
+      "AUTHENTICATION": 2,
+      "ENCRYPT": 4,
+      "OLD-ENVIRON": 2,
+      "ECHO": 8
+    },
+    "telnet.subneg_option": {
+      "NAWS": 1,
+      "LINEMODE": 4,
+      "TSPEED": 2,
+      "XDISPLOC": 2,
+      "NEW-ENVIRON": 2,
+      "TERMINAL-TYPE": 2,
+      "LFLOW": 1
+    },
+    "telnet.subneg_sample.NAWS": {
+      "00500020": 1
+    },
+    "telnet.subneg_sample.LINEMODE": {
+      "0301000003620304020f05000007621c08020409421a0a02": 1,
+      "010f": 1,
+      "010b": 1,
+      "03058000118000128000": 1
+    },
+    "telnet.subneg_sample.TSPEED": {
+      "00393630302c39363030": 1,
+      "01": 1
+    },
+    "telnet.subneg_sample.XDISPLOC": {
+      "0062616d2e7a696e672e6f72673a302e30": 1,
+      "01": 1
+    },
+    "telnet.subneg_sample.NEW-ENVIRON": {
+      "0000444953504c41590162616d2e7a696e672e6f72673a30": 1,
+      "01": 1
+    },
+    "telnet.subneg_sample.TERMINAL-TYPE": {
+      "00787465726d2d636f6c6f72": 1,
+      "01": 1
+    },
+    "telnet.subneg_sample.LFLOW": {
+      "02": 1
+    },
+    "http.header_value.upgrade-insecure-requests": {
+      "1": 48
+    },
+    "http.header_value.location": {
+      "foo": 1,
+      "/": 15,
+      "foobar": 2,
+      "g:h": 2,
+      "g": 4,
+      "./g": 1,
+      "g/": 1,
+      "/g": 1,
+      "//g": 1,
+      "?y": 1,
+      "g?y": 2
+    }
+  },
+  "summary": [
+    {
+      "field": "http.header_name",
+      "cardinality": 31,
+      "bits": 4.95,
+      "observations": 536
+    },
+    {
+      "field": "http.header_value.accept",
+      "cardinality": 3,
+      "bits": 1.58,
+      "observations": 52
+    },
+    {
+      "field": "http.header_value.accept-charset",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 3
+    },
+    {
+      "field": "http.header_value.accept-encoding",
+      "cardinality": 3,
+      "bits": 1.58,
+      "observations": 52
+    },
+    {
+      "field": "http.header_value.accept-language",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 51
+    },
+    {
+      "field": "http.header_value.accept-ranges",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 2
+    },
+    {
+      "field": "http.header_value.cache-control",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "http.header_value.cf-ray",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.connection",
+      "cardinality": 3,
+      "bits": 1.58,
+      "observations": 55
+    },
+    {
+      "field": "http.header_value.content-encoding",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 3
+    },
+    {
+      "field": "http.header_value.content-length",
+      "cardinality": 3,
+      "bits": 1.58,
+      "observations": 3
+    },
+    {
+      "field": "http.header_value.content-type",
+      "cardinality": 3,
+      "bits": 1.58,
+      "observations": 4
+    },
+    {
+      "field": "http.header_value.cookie",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.date",
+      "cardinality": 24,
+      "bits": 4.58,
+      "observations": 52
+    },
+    {
+      "field": "http.header_value.etag",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "http.header_value.host",
+      "cardinality": 5,
+      "bits": 2.32,
+      "observations": 52
+    },
+    {
+      "field": "http.header_value.keep-alive",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 4
+    },
+    {
+      "field": "http.header_value.last-modified",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "http.header_value.location",
+      "cardinality": 11,
+      "bits": 3.46,
+      "observations": 31
+    },
+    {
+      "field": "http.header_value.p3p",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.referer",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "http.header_value.server",
+      "cardinality": 5,
+      "bits": 2.32,
+      "observations": 52
+    },
+    {
+      "field": "http.header_value.set-cookie",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.strict-transport-security",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.transfer-encoding",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.upgrade-insecure-requests",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 48
+    },
+    {
+      "field": "http.header_value.user-agent",
+      "cardinality": 4,
+      "bits": 2.0,
+      "observations": 52
+    },
+    {
+      "field": "http.header_value.vary",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 2
+    },
+    {
+      "field": "http.header_value.x-frame-options",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.x-mod-pagespeed",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "http.header_value.x-slogan",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "http.method",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 52
+    },
+    {
+      "field": "http.query_key",
+      "cardinality": 14,
+      "bits": 3.81,
+      "observations": 46
+    },
+    {
+      "field": "http.query_value",
+      "cardinality": 23,
+      "bits": 4.52,
+      "observations": 28
+    },
+    {
+      "field": "http.reason",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 52
+    },
+    {
+      "field": "http.request_version",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 52
+    },
+    {
+      "field": "http.response_version",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 52
+    },
+    {
+      "field": "http.status",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 52
+    },
+    {
+      "field": "http.target",
+      "cardinality": 26,
+      "bits": 4.7,
+      "observations": 52
+    },
+    {
+      "field": "telnet.command",
+      "cardinality": 5,
+      "bits": 2.32,
+      "observations": 51
+    },
+    {
+      "field": "telnet.option",
+      "cardinality": 13,
+      "bits": 3.7,
+      "observations": 37
+    },
+    {
+      "field": "telnet.subneg_option",
+      "cardinality": 7,
+      "bits": 2.81,
+      "observations": 14
+    },
+    {
+      "field": "telnet.subneg_sample.LFLOW",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "telnet.subneg_sample.LINEMODE",
+      "cardinality": 4,
+      "bits": 2.0,
+      "observations": 4
+    },
+    {
+      "field": "telnet.subneg_sample.NAWS",
+      "cardinality": 1,
+      "bits": 0.0,
+      "observations": 1
+    },
+    {
+      "field": "telnet.subneg_sample.NEW-ENVIRON",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "telnet.subneg_sample.TERMINAL-TYPE",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "telnet.subneg_sample.TSPEED",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    },
+    {
+      "field": "telnet.subneg_sample.XDISPLOC",
+      "cardinality": 2,
+      "bits": 1.0,
+      "observations": 2
+    }
+  ]
+}
